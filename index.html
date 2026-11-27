@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>赔率报告列表 - Prediction Tool</title>
+  <style>
+    body{font-family: Arial, Helvetica, sans-serif; margin:20px}
+    h1{font-size:20px}
+    #controls{margin-bottom:12px}
+    #reports{margin-top:12px}
+    .report-item{padding:8px;border-bottom:1px solid #eee}
+    .btn{display:inline-block;padding:6px 10px;margin-left:6px;background:#2d8cf0;color:#fff;border-radius:4px;text-decoration:none}
+    .btn.small{padding:4px 8px;font-size:13px}
+    pre{background:#f7f7f7;padding:10px;border-radius:6px;overflow:auto;max-height:480px}
+    #viewer{margin-top:16px}
+  </style>
+</head>
+<body>
+  <h1>中国体彩赔率报告</h1>
+  <div id="controls">
+    <button id="refreshBtn" class="btn">刷新列表</button>
+    <span style="margin-left:12px;color:#666">页面会列出 backend/reports/ 下的每日赔率 JSON 文件（odds_YYYYMMDD.json）。</span>
+  </div>
+
+  <div id="reports">加载中...</div>
+
+  <div id="viewer">
+    <h2 id="viewTitle"></h2>
+    <pre id="jsonView" style="display:none"></pre>
+  </div>
+
+<script>
+const reportsEl = document.getElementById('reports');
+const refreshBtn = document.getElementById('refreshBtn');
+const jsonView = document.getElementById('jsonView');
+const viewTitle = document.getElementById('viewTitle');
+
+async function listReports(){
+  reportsEl.textContent = '加载中...';
+  try{
+    const res = await fetch('/api/football/reports');
+    if(!res.ok) throw new Error('列表接口返回 '+res.status);
+    const j = await res.json();
+    renderList(j.reports || []);
+  }catch(err){
+    reportsEl.textContent = '获取列表失败：' + err.message;
+  }
+}
+
+function renderList(items){
+  if(!items || items.length===0){
+    reportsEl.innerHTML = '<div>未发现报告文件（backend/reports/odds_YYYYMMDD.json）。</div>';
+    return;
+  }
+  const html = items.map(fn=>{
+    const date = fn.replace('odds_','').replace('.json','');
+    return `<div class="report-item"><strong>${date}</strong>
+      <a class="btn small" href="#" data-date="${date}" onclick="viewReport(event)">查看</a>
+      <a class="btn small" href="/api/football/reports/download/${date}">下载</a>
+    </div>`;
+  }).join('');
+  reportsEl.innerHTML = html;
+}
+
+async function viewReport(e){
+  e.preventDefault();
+  const date = e.currentTarget.getAttribute('data-date');
+  viewTitle.textContent = '报告：' + date;
+  jsonView.style.display = 'block';
+  jsonView.textContent = '加载中...';
+  try{
+    const res = await fetch('/api/football/odds/' + date);
+    if(!res.ok){
+      const txt = await res.text();
+      jsonView.textContent = '接口返回错误：' + res.status + '\n' + txt;
+      return;
+    }
+    const j = await res.json();
+    jsonView.textContent = JSON.stringify(j.data, null, 2);
+  }catch(err){
+    jsonView.textContent = '获取报告失败：' + err.message;
+  }
+}
+
+refreshBtn.addEventListener('click', listReports);
+// initial
+listReports();
+</script>
+</body>
+</html>
